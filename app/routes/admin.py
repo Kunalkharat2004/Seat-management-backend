@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_current_admin_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.admin import BulkUploadResponse, CreateEmployeeRequest
+from app.schemas.admin import BulkUploadResponse, CreateEmployeeRequest, UserStatusUpdateRequest
 from app.services.admin_service import (
     bulk_create_employees_from_csv,
     create_employee_and_send_invite,
+    update_user_status,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -45,3 +46,14 @@ async def bulk_upload_employees(
         )
 
     return await bulk_create_employees_from_csv(db, file)
+
+
+@router.patch("/users/status")
+async def update_employee_status(
+    emp_id: str,
+    body: UserStatusUpdateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user),
+):
+    """Activate or deactivate an employee account."""
+    return await update_user_status(db, emp_id, body.status, admin)

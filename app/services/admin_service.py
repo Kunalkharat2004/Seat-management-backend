@@ -199,3 +199,69 @@ async def bulk_create_employees_from_csv(
         "skipped_rows": skipped,
         "failed_rows": failed,
     }
+
+
+async def update_user_status(
+    db: Session,
+    employee_id: str,
+    new_status: str,
+    current_admin: User,
+) -> dict:
+    """Activate or deactivate an employee account.
+
+    Parameters
+    ----------
+    db : Session
+        Active SQLAlchemy session.
+    employee_id : str
+        The employee_id of the target user.
+    new_status : str
+        One of ``"active"`` or ``"inactive"``.
+    current_admin : User
+        The authenticated admin performing the action.
+
+    Returns
+    -------
+    dict
+        Confirmation message with updated employee_id and status.
+
+    Raises
+    ------
+    HTTPException (404)
+        If the target user does not exist.
+    HTTPException (400)
+        If the admin tries to change their own status.
+    """
+
+    # ── Fetch target user ─────────────────────────────────────────
+    user = db.query(User).filter(User.employee_id == employee_id).first()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Employee '{employee_id}' not found.",
+        )
+
+    # ── Self-modification guard ───────────────────────────────────
+    if current_admin.id == user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin cannot change their own status.",
+        )
+
+    # ── Update & commit ───────────────────────────────────────────
+    user.status = new_status
+    db.commit()
+
+    logger.info(
+        "Admin '%s' set employee '%s' to '%s'.",
+        current_admin.employee_id,
+        employee_id,
+        new_status,
+    )
+
+    return {
+        "message": f"Employee status updated to '{new_status}'.",
+        "employee_id": employee_id,
+        "status": new_status,
+    }
