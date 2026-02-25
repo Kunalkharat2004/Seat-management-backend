@@ -2,10 +2,12 @@
 Service layer for admin operations — employee creation and invite flow.
 """
 
+import csv
+import io
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.security import generate_secure_token, hash_token
@@ -14,6 +16,8 @@ from app.schemas.admin import CreateEmployeeRequest
 from app.utils.email import send_invite_email
 
 logger = logging.getLogger(__name__)
+
+_REQUIRED_CSV_COLUMNS = {"employee_id", "name", "email", "role"}
 
 
 async def create_employee_and_send_invite(
@@ -83,4 +87,115 @@ async def create_employee_and_send_invite(
     return {
         "message": "Employee created and invite email sent.",
         "employee_id": employee_data.employee_id,
+    }
+
+
+async def bulk_create_employees_from_csv(
+    db: Session,
+    file: UploadFile,
+) -> dict:
+    """Parse a CSV file and create employee records row-by-row.
+
+    Each row is processed in its own transaction so that a single
+    failure never rolls back the entire batch.
+
+    Parameters
+    ----------
+    db : Session
+        Active SQLAlchemy session.
+    file : UploadFile
+        Uploaded CSV with columns ``employee_id,name,email,role``.
+
+    Returns
+    -------
+    dict
+        Counts: ``total_rows``, ``successful_creations``,
+        ``skipped_rows``, ``failed_rows``.
+    """
+
+    # ── Read & parse CSV ──────────────────────────────────────────
+    raw_bytes = await file.read()
+    try:
+        text = raw_bytes.decode("utf-8-sig")  # handles optional BOM
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File is not valid UTF-8.",
+        )
+
+    reader = csv.DictReader(io.StringIO(text))
+
+    if reader.fieldnames is None or not _REQUIRED_CSV_COLUMNS.issubset(
+        {col.strip().lower() for col in reader.fieldnames}
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"CSV must contain columns: {', '.join(sorted(_REQUIRED_CSV_COLUMNS))}. "
+                f"Found: {reader.fieldnames}"
+            ),
+        )
+
+    # ── Process rows ──────────────────────────────────────────────
+    total = 0
+    created = 0
+    skipped = 0
+    failed = 0
+
+    for row in reader:
+        total += 1
+        emp_id = (row.get("employee_id") or "").strip()
+        name = (row.get("name") or "").strip()
+        email = (row.get("email") or "").strip()
+        role = (row.get("role") or "employee").strip() or "employee"
+
+        if not emp_id or not name or not email:
+            logger.warning("Row %d: missing required field(s), skipping.", total)
+            failed += 1
+            continue
+
+        # Skip duplicates
+        if db.query(User).filter(User.employee_id == emp_id).first():
+            logger.info("Row %d: employee_id '%s' already exists, skipping.", total, emp_id)
+            skipped += 1
+            continue
+
+        try:
+            raw_token = generate_secure_token()
+
+            user = User(
+                employee_id=emp_id,
+                name=name,
+                email=email,
+                role=role,
+                password_hash=None,
+                must_change_password=True,
+                is_invite_sent=False,
+                password_reset_token_hash=hash_token(raw_token),
+                password_reset_expires=datetime.now(timezone.utc) + timedelta(hours=24),
+            )
+
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            # Send invite email
+            await send_invite_email(to_email=email, token=raw_token)
+
+            user.is_invite_sent = True
+            db.commit()
+
+            created += 1
+            logger.info("Row %d: employee '%s' created and invite sent.", total, emp_id)
+
+        except Exception:
+            db.rollback()
+            failed += 1
+            logger.exception("Row %d: failed to create employee '%s'.", total, emp_id)
+
+    return {
+        "total_rows": total,
+        "successful_creations": created,
+        "skipped_rows": skipped,
+        "failed_rows": failed,
     }

@@ -1,0 +1,6 @@
+employee_id,name,email,role
+EMP101,Alice Johnson,alice@example.com,employee
+EMP102,Bob Smith,bob@example.com,admin
+EMP103,Charlie Davis,charlie@example.com,employee
+EMP101,Duplicate Alice,alice.dup@example.com,employee
+,Invalid Row,missing_id@example.com,employee
