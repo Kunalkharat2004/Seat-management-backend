@@ -15,6 +15,14 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     FRONTEND_ORIGIN: str = "http://localhost:5173"
 
+    # ── SMTP / Email ──────────────────────────────────────────────
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = "noreply@company.com"
+    INVITE_BASE_URL: str = "http://localhost:3000/set-password"
+
     # ── Expiry Job ────────────────────────────────────────────────
     EXPIRY_HOUR: int = 10
     EXPIRY_MINUTE: int = 30
