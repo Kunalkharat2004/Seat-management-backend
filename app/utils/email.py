@@ -31,16 +31,14 @@ async def send_invite_email(to_email: str, token: str) -> None:
 
     # ── Development mode: console only ────────────────────────────
     if settings.APP_ENV == "development":
-        logger.info(
-            "\n"
-            "╔══════════════════════════════════════════════════════╗\n"
-            "║            📧  INVITE EMAIL (dev mode)              ║\n"
-            "╠══════════════════════════════════════════════════════╣\n"
-            "║  To:   %-44s ║\n"
-            "║  Link: %-44s ║\n"
-            "╚══════════════════════════════════════════════════════╝",
-            to_email,
-            invite_link,
+        print(
+            f"\n"
+            f"╔══════════════════════════════════════════════════════╗\n"
+            f"║            📧  INVITE EMAIL (dev mode)              ║\n"
+            f"╠══════════════════════════════════════════════════════╣\n"
+            f"║  To:   {to_email:<44} ║\n"
+            f"║  Link: {invite_link:<44} ║\n"
+            f"╚══════════════════════════════════════════════════════╝"
         )
         return
 
