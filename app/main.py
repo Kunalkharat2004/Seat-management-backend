@@ -28,6 +28,12 @@ def create_app() -> FastAPI:
     def health_check():
         return {"status": "ok"}
 
+    # ── Routers ───────────────────────────────────────────────────
+    from app.routes.admin import router as admin_router
+    from app.routes.auth import router as auth_router
+    app.include_router(admin_router)
+    app.include_router(auth_router)
+
     return app
 
 
