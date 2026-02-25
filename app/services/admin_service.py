@@ -1,5 +1,5 @@
 """
-Service layer for admin operations — employee creation and invite flow.
+Service layer for admin operations — employee CRUD and invite flow.
 """
 
 import csv
@@ -12,12 +12,28 @@ from sqlalchemy.orm import Session
 
 from app.core.security import generate_secure_token, hash_token
 from app.models.user import User
-from app.schemas.admin import CreateEmployeeRequest
+from app.schemas.admin import (
+    CreateEmployeeRequest,
+    EmployeeResponse,
+    EmployeeUpdateRequest,
+    PaginatedEmployeeResponse,
+)
 from app.utils.email import send_invite_email
 
 logger = logging.getLogger(__name__)
 
 _REQUIRED_CSV_COLUMNS = {"employee_id", "name", "email", "role"}
+
+# Fields that must never be touched via the generic update endpoint.
+_PROTECTED_FIELDS = {
+    "password_hash",
+    "password_reset_token_hash",
+    "password_reset_expires",
+    "must_change_password",
+}
+
+
+# ── Create ────────────────────────────────────────────────────────
 
 
 async def create_employee_and_send_invite(
@@ -25,18 +41,6 @@ async def create_employee_and_send_invite(
     employee_data: CreateEmployeeRequest,
 ) -> dict:
     """Create a new employee record and send a password-setup invite email.
-
-    Parameters
-    ----------
-    db : Session
-        Active SQLAlchemy session (from ``get_db``).
-    employee_data : CreateEmployeeRequest
-        Validated request body.
-
-    Returns
-    -------
-    dict
-        ``{"message": "...", "employee_id": "..."}``
 
     Raises
     ------
@@ -90,6 +94,9 @@ async def create_employee_and_send_invite(
     }
 
 
+# ── Bulk create ───────────────────────────────────────────────────
+
+
 async def bulk_create_employees_from_csv(
     db: Session,
     file: UploadFile,
@@ -98,19 +105,6 @@ async def bulk_create_employees_from_csv(
 
     Each row is processed in its own transaction so that a single
     failure never rolls back the entire batch.
-
-    Parameters
-    ----------
-    db : Session
-        Active SQLAlchemy session.
-    file : UploadFile
-        Uploaded CSV with columns ``employee_id,name,email,role``.
-
-    Returns
-    -------
-    dict
-        Counts: ``total_rows``, ``successful_creations``,
-        ``skipped_rows``, ``failed_rows``.
     """
 
     # ── Read & parse CSV ──────────────────────────────────────────
@@ -201,39 +195,54 @@ async def bulk_create_employees_from_csv(
     }
 
 
-async def update_user_status(
+# ── Read (list + single) ─────────────────────────────────────────
+
+
+async def get_employees(
+    db: Session,
+    page: int = 1,
+    page_size: int = 10,
+) -> PaginatedEmployeeResponse:
+    """Return a paginated list of employees ordered by ``created_at`` desc."""
+
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 10
+    if page_size > 100:
+        page_size = 100
+
+    total = db.query(User).count()
+    offset = (page - 1) * page_size
+
+    users = (
+        db.query(User)
+        .order_by(User.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+
+    return PaginatedEmployeeResponse(
+        total=total,
+        page=page,
+        page_size=page_size,
+        items=[EmployeeResponse.model_validate(u) for u in users],
+    )
+
+
+async def get_employee_by_id(
     db: Session,
     employee_id: str,
-    new_status: str,
-    current_admin: User,
-) -> dict:
-    """Activate or deactivate an employee account.
-
-    Parameters
-    ----------
-    db : Session
-        Active SQLAlchemy session.
-    employee_id : str
-        The employee_id of the target user.
-    new_status : str
-        One of ``"active"`` or ``"inactive"``.
-    current_admin : User
-        The authenticated admin performing the action.
-
-    Returns
-    -------
-    dict
-        Confirmation message with updated employee_id and status.
+) -> EmployeeResponse:
+    """Fetch a single employee by ``employee_id``.
 
     Raises
     ------
     HTTPException (404)
-        If the target user does not exist.
-    HTTPException (400)
-        If the admin tries to change their own status.
+        If no user exists with the given ``employee_id``.
     """
 
-    # ── Fetch target user ─────────────────────────────────────────
     user = db.query(User).filter(User.employee_id == employee_id).first()
 
     if user is None:
@@ -242,26 +251,95 @@ async def update_user_status(
             detail=f"Employee '{employee_id}' not found.",
         )
 
-    # ── Self-modification guard ───────────────────────────────────
+    return EmployeeResponse.model_validate(user)
+
+
+# ── Update ────────────────────────────────────────────────────────
+
+
+async def update_employee(
+    db: Session,
+    employee_id: str,
+    update_data: EmployeeUpdateRequest,
+) -> EmployeeResponse:
+    """Update allowed fields for the given employee.
+
+    Only non-``None`` fields from the request body are applied.
+    Password-related fields are never modified.
+
+    Raises
+    ------
+    HTTPException (404)
+        If no user exists with the given ``employee_id``.
+    """
+
+    user = db.query(User).filter(User.employee_id == employee_id).first()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Employee '{employee_id}' not found.",
+        )
+
+    # Apply only the fields that were explicitly provided.
+    update_fields = update_data.model_dump(exclude_unset=True)
+
+    for field, value in update_fields.items():
+        if field in _PROTECTED_FIELDS:
+            continue
+        setattr(user, field, value)
+
+    db.commit()
+    db.refresh(user)
+
+    logger.info("Employee '%s' updated.", employee_id)
+
+    return EmployeeResponse.model_validate(user)
+
+
+# ── Delete (soft) ─────────────────────────────────────────────────
+
+
+async def delete_employee(
+    db: Session,
+    employee_id: str,
+    current_admin: User,
+) -> dict:
+    """Soft-delete an employee by setting ``status = 'inactive'``.
+
+    Raises
+    ------
+    HTTPException (404)
+        If the target user does not exist.
+    HTTPException (400)
+        If the admin tries to delete themselves.
+    """
+
+    user = db.query(User).filter(User.employee_id == employee_id).first()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Employee '{employee_id}' not found.",
+        )
+
     if current_admin.id == user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Admin cannot change their own status.",
+            detail="Admin cannot deactivate themselves.",
         )
 
-    # ── Update & commit ───────────────────────────────────────────
-    user.status = new_status
+    user.status = "inactive"
     db.commit()
 
     logger.info(
-        "Admin '%s' set employee '%s' to '%s'.",
+        "Admin '%s' soft-deleted employee '%s'.",
         current_admin.employee_id,
         employee_id,
-        new_status,
     )
 
     return {
-        "message": f"Employee status updated to '{new_status}'.",
+        "message": f"Employee '{employee_id}' has been deactivated.",
         "employee_id": employee_id,
-        "status": new_status,
+        "status": "inactive",
     }
