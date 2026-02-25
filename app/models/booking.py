@@ -22,7 +22,7 @@ class Booking(Base):
 
     # ── Table-level constraints ───────────────────────────────────
     __table_args__ = (
-        UniqueConstraint("user_id", "booking_date", name="uq_user_booking_date"),
+        UniqueConstraint("employee_id", "booking_date", name="uq_employee_booking_date"),
         UniqueConstraint("seat_id", "booking_date", name="uq_seat_booking_date"),
     )
 
@@ -34,7 +34,7 @@ class Booking(Base):
     )
 
     # ── Foreign keys ──────────────────────────────────────────────
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    employee_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
