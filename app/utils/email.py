@@ -27,7 +27,7 @@ async def send_invite_email(to_email: str, token: str) -> None:
     token : str
         Raw (unhashed) invite token to embed in the link.
     """
-    invite_link = f"{settings.INVITE_BASE_URL}?token={token}"
+    invite_link = f"{settings.INVITE_BASE_URL}/set-password?token={token}"
 
     # ── Development mode: console only ────────────────────────────
     if settings.APP_ENV == "development":
