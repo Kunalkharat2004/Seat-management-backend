@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, ForeignKey, String, UniqueConstraint, text
+from sqlalchemy import Date, ForeignKey, String, text
 from sqlalchemy.dialects.postgresql import ENUM, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -20,11 +20,6 @@ booking_status_enum = ENUM(
 class Booking(Base):
     __tablename__ = "bookings"
 
-    # ── Table-level constraints ───────────────────────────────────
-    __table_args__ = (
-        UniqueConstraint("employee_id", "booking_date", name="uq_employee_booking_date"),
-        UniqueConstraint("seat_id", "booking_date", name="uq_seat_booking_date"),
-    )
 
     # ── Primary key ───────────────────────────────────────────────
     id: Mapped[uuid.UUID] = mapped_column(
