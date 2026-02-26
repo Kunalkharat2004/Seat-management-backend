@@ -1,5 +1,7 @@
 """Admin routes — employee CRUD and management."""
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -65,13 +67,16 @@ async def bulk_upload_employees(
 
 @router.get("/users", response_model=PaginatedEmployeeResponse)
 async def list_employees(
+    search: str | None = Query(None, description="Search employee_id, name, or email"),
+    status: Literal["active", "inactive"] | None = Query(None, description="Filter by status"),
+    role: Literal["employee", "admin"] | None = Query(None, description="Filter by role"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin_user),
 ):
-    """Return a paginated list of all employees."""
-    return await get_employees(db, page, page_size)
+    """Return a filtered, paginated list of all employees."""
+    return await get_employees(db, page, page_size, search, status, role)
 
 
 @router.get("/users/{employee_id}", response_model=EmployeeResponse)

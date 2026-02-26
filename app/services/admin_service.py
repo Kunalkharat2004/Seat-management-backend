@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, UploadFile, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.security import generate_secure_token, hash_token
@@ -202,8 +203,21 @@ async def get_employees(
     db: Session,
     page: int = 1,
     page_size: int = 10,
+    search: str | None = None,
+    status_filter: str | None = None,
+    role_filter: str | None = None,
 ) -> PaginatedEmployeeResponse:
-    """Return a paginated list of employees ordered by ``created_at`` desc."""
+    """Return a filtered, paginated list of employees.
+
+    Parameters
+    ----------
+    search : str, optional
+        Case-insensitive partial match on employee_id, name, or email.
+    status_filter : str, optional
+        Exact match on status ("active" / "inactive").
+    role_filter : str, optional
+        Exact match on role ("employee" / "admin").
+    """
 
     if page < 1:
         page = 1
@@ -212,11 +226,43 @@ async def get_employees(
     if page_size > 100:
         page_size = 100
 
-    total = db.query(User).count()
+    # ── Validation ────────────────────────────────────────────────
+    if status_filter and status_filter not in ["active", "inactive"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status: {status_filter}",
+        )
+    if role_filter and role_filter not in ["employee", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role: {role_filter}",
+        )
+
+    # ── Build dynamic query ───────────────────────────────────────
+    query = db.query(User)
+
+    if search:
+        pattern = f"%{search}%"
+        query = query.filter(
+            or_(
+                User.employee_id.ilike(pattern),
+                User.name.ilike(pattern),
+                User.email.ilike(pattern),
+            )
+        )
+
+    if status_filter:
+        query = query.filter(User.status == status_filter)
+
+    if role_filter:
+        query = query.filter(User.role == role_filter)
+
+    # ── Count AFTER filters, then paginate ────────────────────────
+    total = query.count()
     offset = (page - 1) * page_size
 
     users = (
-        db.query(User)
+        query
         .order_by(User.created_at.desc())
         .offset(offset)
         .limit(page_size)
