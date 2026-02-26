@@ -7,7 +7,7 @@ URL = "http://localhost:8000/bookings"
 SEAT_ID = "c5ce1b9b-9227-49ba-abbc-012eecf17c5d"
 BOOKING_DATE = "2026-03-01"
 
-# 🔴 Replace with 50 real employee JWT tokens
+# Replace with 50 real employee JWT tokens
 TOKENS = [
     "USER_TOKEN_1",
     "USER_TOKEN_2",

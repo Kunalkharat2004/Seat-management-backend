@@ -2,8 +2,10 @@
 Service layer for booking operations — create, cancel, and check-in.
 """
 
+import calendar
 import logging
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -13,6 +15,71 @@ from app.models.booking import Booking
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
+
+_IST = ZoneInfo("Asia/Kolkata")
+
+
+# ── Date validation ───────────────────────────────────────────────
+
+
+def validate_booking_date(booking_date: date) -> None:
+    """Enforce all business rules for a valid booking date.
+
+    Rules
+    -----
+    1. Date must not be in the past (relative to today in IST).
+    2. Date must fall within the current calendar month, OR
+    3. Booking for next month is allowed ONLY on the last calendar day
+       of the current month — and only for the 1st of next month.
+    4. Far-future dates beyond the allowed window are rejected.
+
+    All comparisons use Asia/Kolkata (IST) as the reference timezone.
+
+    Raises
+    ------
+    HTTPException (400)
+        If any rule is violated.
+    """
+    today: date = datetime.now(_IST).date()
+
+    # Rule 1 & 5 — reject past dates
+    if booking_date < today:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot book a seat for a past date.",
+        )
+
+    current_year: int  = today.year
+    current_month: int = today.month
+
+    # Last calendar day of the current month (handles leap years + Dec)
+    last_day_of_current_month: int = calendar.monthrange(current_year, current_month)[1]
+    is_last_day_of_month: bool = (today.day == last_day_of_current_month)
+
+    # First day of next month (handles December -> January transition)
+    if current_month == 12:
+        next_month_year: int  = current_year + 1
+        next_month: int       = 1
+    else:
+        next_month_year = current_year
+        next_month      = current_month + 1
+
+    next_month_first = date(next_month_year, next_month, 1)
+
+    # Rule 2 — booking is within current month: always allowed
+    if booking_date.year == current_year and booking_date.month == current_month:
+        return
+
+    # Rule 3 & 4 — booking is for next month's 1st day on last day of month
+    if is_last_day_of_month and booking_date == next_month_first:
+        return
+
+    # Everything else (far future, wrong month, wrong next-month day) is rejected
+    if booking_date > today:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Booking not allowed for this date.",
+        )
 
 
 # ── Create Booking ────────────────────────────────────────────────
@@ -47,12 +114,8 @@ async def create_booking(
             detail="Inactive users cannot create bookings.",
         )
 
-    # 2. Booking date cannot be in the past
-    if booking_date < date.today():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot book a seat for a past date.",
-        )
+    # 2. Validate booking date (IST-aware: past, current month, next-month rules)
+    validate_booking_date(booking_date)
 
     # 3. Build the booking row
     booking = Booking(
