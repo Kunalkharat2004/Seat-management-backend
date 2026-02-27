@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.models.booking import Booking
 from app.models.seat import Seat
 from app.services.booking_service import validate_booking_date
+from app.types.booking_status import CHECKED_IN, CONFIRMED
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ async def get_seat_availability(
             Booking,
             (Booking.seat_id == Seat.id)
             & (Booking.booking_date == booking_date)
-            & (Booking.status.in_(["confirmed", "checked_in"])),
+            & (Booking.status.in_([CONFIRMED, CHECKED_IN])),
         )
         .order_by(Seat.seat_number.asc())
     )

@@ -12,6 +12,7 @@ from app.core.jwt import create_access_token
 from app.core.security import hash_password, hash_token, verify_password
 from app.models.user import User
 from app.schemas.auth import LoginResponse
+from app.types.user_types import STATUS_ACTIVE
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ async def login(db: Session, employee_id: str, password: str) -> LoginResponse:
         raise invalid_credentials
 
     # ── Account status check ──────────────────────────────────────
-    if user.status != "active":
+    if user.status != STATUS_ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive. Contact admin.",

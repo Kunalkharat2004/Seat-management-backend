@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr
 
+from app.types.user_types import ROLE_ADMIN, ROLE_EMPLOYEE, STATUS_ACTIVE, STATUS_INACTIVE
+
 
 class CreateEmployeeRequest(BaseModel):
     """Body for POST /admin/users."""
@@ -13,7 +15,7 @@ class CreateEmployeeRequest(BaseModel):
     employee_id: str
     name: str
     email: EmailStr
-    role: str = "employee"
+    role: str = ROLE_EMPLOYEE
 
 
 class BulkUploadResponse(BaseModel):
@@ -47,8 +49,8 @@ class EmployeeUpdateRequest(BaseModel):
 
     name: str | None = None
     email: EmailStr | None = None
-    role: Literal["employee", "admin"] | None = None
-    status: Literal["active", "inactive"] | None = None
+    role: Literal["employee", "admin"] | None = None  # type: ignore[assignment]
+    status: Literal["active", "inactive"] | None = None  # type: ignore[assignment]
 
 
 class PaginatedEmployeeResponse(BaseModel):

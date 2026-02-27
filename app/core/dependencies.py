@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.jwt import get_current_user
 from app.db.session import get_db
 from app.models.user import User
+from app.types.user_types import ROLE_ADMIN
 
 
 async def get_current_admin_user(
@@ -34,7 +35,7 @@ async def get_current_admin_user(
             detail="User account not found.",
         )
 
-    if user.role != "admin":
+    if user.role != ROLE_ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required.",

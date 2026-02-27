@@ -1,10 +1,21 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.core.scheduler import shutdown_scheduler, start_scheduler
 
 # Import models so Base.metadata knows about all tables
 import app.models  # noqa: F401
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup / shutdown lifecycle for the application."""
+    start_scheduler()
+    yield
+    shutdown_scheduler()
 
 
 def create_app() -> FastAPI:
@@ -12,6 +23,7 @@ def create_app() -> FastAPI:
         title="Seat Management API",
         description="Digital Workspace Seat Management Platform",
         version="0.1.0",
+        lifespan=lifespan,
     )
 
     # ── CORS ──────────────────────────────────────────────────────
@@ -44,3 +56,4 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
