@@ -1,6 +1,7 @@
 """Pydantic schemas for authentication endpoints."""
 
-from pydantic import BaseModel
+import uuid
+from pydantic import BaseModel, ConfigDict
 
 
 class LoginRequest(BaseModel):
@@ -28,6 +29,9 @@ class SetPasswordRequest(BaseModel):
 class UserResponse(BaseModel):
     """Basic user information for /auth/me."""
 
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
     employee_id: str
     name: str
     email: str
