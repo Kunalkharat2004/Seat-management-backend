@@ -1,17 +1,20 @@
 """
-Service layer for booking operations — create, cancel, and check-in.
+Service layer for booking operations — create, cancel, check-in, and list.
 """
 
 import calendar
 import logging
 from datetime import date, datetime, timezone
+from typing import Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
+from sqlalchemy import func as sa_func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.booking import Booking
+from app.models.seat import Seat
 from app.models.user import User
 from app.types.booking_status import (
     CANCELLED,
@@ -24,6 +27,66 @@ from app.types.user_types import STATUS_ACTIVE
 logger = logging.getLogger(__name__)
 
 _IST = ZoneInfo("Asia/Kolkata")
+
+
+# ── List My Bookings (paginated) ─────────────────────────────────
+
+
+async def get_my_bookings(
+    db: Session,
+    current_user: User,
+    page: int,
+    page_size: int,
+    status_filter: Optional[str] = None,
+    date_filter: Optional[date] = None,
+) -> dict:
+    """Return the current user's bookings with seat_number, paginated.
+
+    Performs a single JOIN to the seats table — no N+1.
+    Uses a separate COUNT query for the total.
+    """
+
+    # ── Base filter: only this user's bookings ────────────────────
+    base = db.query(Booking).join(Seat, Booking.seat_id == Seat.id).filter(
+        Booking.employee_id == current_user.id,
+    )
+
+    # ── Optional filters ──────────────────────────────────────────
+    if status_filter is not None:
+        base = base.filter(Booking.status == status_filter)
+    if date_filter is not None:
+        base = base.filter(Booking.booking_date == date_filter)
+
+    # ── Total count (before pagination) ───────────────────────────
+    total: int = base.count()
+
+    # ── Paginated results ─────────────────────────────────────────
+    offset = (page - 1) * page_size
+    bookings = (
+        base
+        .order_by(Booking.booking_date.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+
+    return {
+        "items": [
+            {
+                "id": b.id,
+                "seat_id": b.seat_id,
+                "seat_number": b.seat.seat_number,
+                "booking_date": b.booking_date,
+                "status": b.status,
+                "check_in_time": b.check_in_time,
+                "created_at": b.created_at,
+            }
+            for b in bookings
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 # ── Date validation ───────────────────────────────────────────────
