@@ -25,7 +25,7 @@ from app.types.user_types import (
     STATUS_ACTIVE,
     STATUS_INACTIVE,
 )
-from app.utils.email import send_invite_email
+from app.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +88,14 @@ async def create_employee_and_send_invite(
     db.refresh(user)
 
     # ── Send invite email ─────────────────────────────────────────
-    await send_invite_email(to_email=employee_data.email, token=raw_token)
-
-    user.is_invite_sent = True
-    db.commit()
+    email_service = EmailService()
+    try:
+        email_sent = await email_service.send_invite_email(to_email=employee_data.email, invite_token=raw_token)
+        if email_sent:
+            user.is_invite_sent = True
+            db.commit()
+    except Exception:
+        logger.exception("Email sending failed for %s", user.employee_id)
 
     logger.info("Employee %s created and invite sent.", employee_data.employee_id)
 
@@ -181,10 +185,14 @@ async def bulk_create_employees_from_csv(
             db.refresh(user)
 
             # Send invite email
-            await send_invite_email(to_email=email, token=raw_token)
-
-            user.is_invite_sent = True
-            db.commit()
+            email_service = EmailService()
+            try:
+                email_sent = await email_service.send_invite_email(to_email=email, invite_token=raw_token)
+                if email_sent:
+                    user.is_invite_sent = True
+                    db.commit()
+            except Exception:
+                logger.exception("Email sending failed for %s", emp_id)
 
             created += 1
             logger.info("Row %d: employee '%s' created and invite sent.", total, emp_id)

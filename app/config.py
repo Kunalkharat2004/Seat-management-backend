@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -14,14 +15,14 @@ class Settings(BaseSettings):
     # ── App ───────────────────────────────────────────────────────
     APP_ENV: str = "development"
     FRONTEND_ORIGIN: str = "http://localhost:5173"
+    ENV: str = "development"
+    FRONTEND_URL: str = "http://localhost:5173"
 
-    # ── SMTP / Email ──────────────────────────────────────────────
-    SMTP_HOST: str = "localhost"
-    SMTP_PORT: int = 587
-    SMTP_USERNAME: str = ""
-    SMTP_PASSWORD: str = ""
-    SMTP_FROM_EMAIL: str = "noreply@company.com"
-    INVITE_BASE_URL: str = "http://localhost:3000/set-password"
+    # ── Email (Resend) ────────────────────────────────────────────
+    EMAIL_PROVIDER: str = "resend"
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM: str = "onboarding@resend.dev"
+    EMAIL_OVERRIDE_TO: Optional[str] = None
 
     # ── Expiry Job ────────────────────────────────────────────────
     EXPIRY_HOUR: int = 10
