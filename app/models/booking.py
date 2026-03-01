@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, ForeignKey, String, text
+from sqlalchemy import Date, ForeignKey, Index, String, text
 from sqlalchemy.dialects.postgresql import ENUM, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -17,8 +17,27 @@ booking_status_enum = ENUM(
 )
 
 
+
+
 class Booking(Base):
     __tablename__ = "bookings"
+
+    __table_args__ = (
+        Index(
+            "uq_employee_booking_active",
+            "employee_id",
+            "booking_date",
+            unique=True,
+            postgresql_where=text("status IN ('confirmed', 'checked_in')"),
+        ),
+        Index(
+            "uq_seat_booking_active",
+            "seat_id",
+            "booking_date",
+            unique=True,
+            postgresql_where=text("status IN ('confirmed', 'checked_in')"),
+        ),
+    )
 
 
     # ── Primary key ───────────────────────────────────────────────
@@ -50,6 +69,7 @@ class Booking(Base):
         booking_status_enum,
         nullable=False,
         server_default=text("'confirmed'"),
+        index=True,
     )
     check_in_time: Mapped[datetime | None] = mapped_column(
         nullable=True, default=None

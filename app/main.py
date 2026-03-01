@@ -46,11 +46,13 @@ def create_app() -> FastAPI:
     from app.routes.bookings import router as bookings_router
     from app.routes.seat_admin import router as seat_admin_router
     from app.routes.seats import router as seats_router
+    from app.api.admin.dashboard import router as dashboard_router
     app.include_router(admin_router)
     app.include_router(auth_router)
     app.include_router(bookings_router)
     app.include_router(seat_admin_router)
     app.include_router(seats_router)
+    app.include_router(dashboard_router)
 
     return app
 

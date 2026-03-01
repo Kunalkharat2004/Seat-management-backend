@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
-
+from app.config import settings
 from app.core.security import generate_secure_token, hash_token
 from app.models.user import User
 from app.schemas.admin import (
@@ -82,6 +82,9 @@ async def create_employee_and_send_invite(
         password_reset_token_hash=hash_token(raw_token),
         password_reset_expires=datetime.now(timezone.utc) + timedelta(hours=24),
     )
+
+    if settings.APP_ENV == "development":
+        print(f"\n[DEV MODE] Invite token for {employee_data.email}: {raw_token}\n")
 
     db.add(user)
     db.commit()
@@ -179,6 +182,9 @@ async def bulk_create_employees_from_csv(
                 password_reset_token_hash=hash_token(raw_token),
                 password_reset_expires=datetime.now(timezone.utc) + timedelta(hours=24),
             )
+
+            if settings.APP_ENV == "development":
+                print(f"[DEV MODE] Bulk invite token for {email}: {raw_token}")
 
             db.add(user)
             db.commit()

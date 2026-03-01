@@ -38,10 +38,10 @@ class User(Base):
 
     # ── Role & status ─────────────────────────────────────────────
     role: Mapped[str] = mapped_column(
-        user_role_enum, nullable=False, server_default=text("'employee'")
+        user_role_enum, nullable=False, server_default=text("'employee'"), index=True
     )
     status: Mapped[str] = mapped_column(
-        user_status_enum, nullable=False, server_default=text("'active'")
+        user_status_enum, nullable=False, server_default=text("'active'"), index=True
     )
 
     # ── Invite & password-reset state ─────────────────────────────
