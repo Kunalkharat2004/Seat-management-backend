@@ -10,7 +10,7 @@ from app.types.user_types import ROLE_ADMIN, ROLE_EMPLOYEE, STATUS_ACTIVE, STATU
 
 
 class CreateEmployeeRequest(BaseModel):
-    """Body for POST /admin/users."""
+    """Body for POST /admin/employees."""
 
     employee_id: str
     name: str
@@ -19,7 +19,7 @@ class CreateEmployeeRequest(BaseModel):
 
 
 class BulkUploadResponse(BaseModel):
-    """Response for POST /admin/users/bulk-upload."""
+    """Response for POST /admin/employees/bulk-upload."""
 
     total_rows: int
     successful_creations: int
@@ -45,7 +45,7 @@ class EmployeeResponse(BaseModel):
 
 
 class EmployeeUpdateRequest(BaseModel):
-    """Body for PATCH /admin/users/{employee_id}."""
+    """Body for PATCH /admin/employees/{employee_id}."""
 
     name: str | None = None
     email: EmailStr | None = None
