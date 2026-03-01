@@ -34,6 +34,17 @@ async def login_route(
     return await login(db, body.employee_id, body.password)
 
 
+@router.post("/logout")
+async def logout_route(
+    _employee_id: str = Depends(get_current_user),
+):
+    """Logout the current user.
+
+    Stateless — the frontend is responsible for discarding the token.
+    """
+    return {"message": "Logged out successfully"}
+
+
 @router.post("/set-password")
 async def set_password_route(
     body: SetPasswordRequest,
