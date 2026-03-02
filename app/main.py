@@ -8,6 +8,13 @@ from app.core.scheduler import shutdown_scheduler, start_scheduler
 
 # Import models so Base.metadata knows about all tables
 import app.models  # noqa: F401
+import logging
+
+# Configure logging to ensure INFO logs appear in the console
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 
 @asynccontextmanager
