@@ -1,7 +1,7 @@
 """Pydantic schemas for authentication endpoints."""
 
 import uuid
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class LoginRequest(BaseModel):
@@ -37,3 +37,15 @@ class UserResponse(BaseModel):
     email: str
     role: str
     status: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Body for POST /auth/forgot-password."""
+
+    email: EmailStr
+
+
+class GenericMessageResponse(BaseModel):
+    """Generic message response (no data leakage)."""
+
+    message: str

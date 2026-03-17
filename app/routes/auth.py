@@ -1,16 +1,18 @@
-"""Authentication routes — login and set-password."""
+"""Authentication routes — login, set-password, and forgot-password."""
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.auth import (
+    ForgotPasswordRequest,
+    GenericMessageResponse,
     LoginRequest,
     LoginResponse,
     SetPasswordRequest,
     UserResponse,
 )
-from app.services.auth_service import get_auth_user, login, set_password
+from app.services.auth_service import forgot_password, get_auth_user, login, set_password
 from app.core.jwt import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -52,3 +54,12 @@ async def set_password_route(
 ):
     """Set password using an invite/reset token."""
     return await set_password(db, body.token, body.new_password)
+
+
+@router.post("/forgot-password", response_model=GenericMessageResponse)
+async def forgot_password_route(
+    body: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """Request a password-reset email. Always returns 200."""
+    return await forgot_password(db, body.email)

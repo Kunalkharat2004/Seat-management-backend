@@ -1,20 +1,30 @@
 """
-Service layer for authentication — login and set-password flows.
+Service layer for authentication — login, set-password, and forgot-password flows.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.jwt import create_access_token
-from app.core.security import hash_password, hash_token, verify_password
+from app.core.security import (
+    generate_secure_token,
+    hash_password,
+    hash_token,
+    verify_password,
+)
 from app.models.user import User
 from app.schemas.auth import LoginResponse
+from app.services.email_service import EmailService
 from app.types.user_types import STATUS_ACTIVE
 
 logger = logging.getLogger(__name__)
+
+_FORGOT_PASSWORD_MESSAGE = (
+    "If the account exists, a password reset email has been sent."
+)
 
 
 async def login(db: Session, employee_id: str, password: str) -> LoginResponse:
@@ -164,3 +174,58 @@ async def get_auth_user(db: Session, employee_id: str) -> User:
             detail="User account not found.",
         )
     return user
+
+
+async def forgot_password(db: Session, email: str) -> dict:
+    """Initiate a password-reset flow for the given email.
+
+    Always returns the same generic message regardless of whether the
+    user exists, so that user-existence is never leaked.
+
+    Parameters
+    ----------
+    db : Session
+        Active SQLAlchemy session.
+    email : str
+        Email address submitted by the user.
+
+    Returns
+    -------
+    dict
+        ``{"message": "..."}`` — always the same generic message.
+    """
+
+    generic_response = {"message": _FORGOT_PASSWORD_MESSAGE}
+
+    # ── Single query — no pre-check that leaks existence ──────────
+    user = db.query(User).filter(User.email == email).first()
+
+    if user is None or user.status != STATUS_ACTIVE:
+        logger.info("Forgot-password requested for unknown or inactive email.")
+        return generic_response
+
+    # ── Generate and store hashed token ───────────────────────────
+    raw_token = generate_secure_token()
+    user.password_reset_token_hash = hash_token(raw_token)
+    user.password_reset_expires = datetime.now(timezone.utc) + timedelta(minutes=15)
+
+    db.commit()
+    logger.info("Password reset token stored for user %s.", user.employee_id)
+
+    # ── Send email AFTER commit (failure must NOT rollback DB) ────
+    email_service = EmailService()
+    try:
+        if user.must_change_password:
+            await email_service.send_invite_email(
+                to_email=user.email, invite_token=raw_token,
+            )
+        else:
+            await email_service.send_password_reset_email(
+                to_email=user.email, reset_token=raw_token,
+            )
+    except Exception:
+        logger.exception(
+            "Failed to send password-reset email for user %s.", user.employee_id,
+        )
+
+    return generic_response
