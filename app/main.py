@@ -42,6 +42,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # ── Root ──────────────────────────────────────────────────────
+    @app.get("/", tags=["root"])
+    def root():
+        return {"message": "Welcome to SF Portal"}
+
     # ── Health check ──────────────────────────────────────────────
     @app.get("/health", tags=["health"])
     def health_check():
